@@ -7,6 +7,7 @@ Built on **Sarvam AI** APIs · **Node.js** · **Express** · **React**
 
 ---
 
+
 ## ✨ What It Does
 
 VaakAnuvadak fills the gap that Sarvam AI's individual APIs leave open — it chains **STT → Translate → TTS** into a seamless, zero-typing voice translation experience across 12 Indian languages.
