@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0A0B0E;
+    --card-surface: #12141C;
+    --card-border: #222634;
+    --accent-gold: #F59E0B;
+  }
+
+  html.light {
+    --bg-primary: #FAF7F2;
+    --card-surface: #FFFFFF;
+    --card-border: #E8E2D7;
+    --accent-gold: #D97706;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 150, 175, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.4);
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(18, 20, 28, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.light .glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Sound Wave animation bar heights */
+.wave-bar {
+  animation: soundWave 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes soundWave {
+  0% {
+    transform: scaleY(0.2);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0.3);
+  }
+}
+
+/* Face-to-face table 180 flip */
+.flip-180 {
+  transform: rotate(180deg);
+}

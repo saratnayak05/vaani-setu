@@ -6,6 +6,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": true,
+    "verbatimModuleSyntax": false,
     "lib": ["ES2022"],
     "types": ["node"]
   },

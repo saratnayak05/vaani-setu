@@ -8,13 +8,19 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test:ws": "tsx scripts/test-client.ts"
   },
   "dependencies": {
-    "@vaani-setu/shared": "*"
+    "@vaani-setu/shared": "*",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^22.7.0",
+    "@types/ws": "^8.5.12",
     "tsx": "^4.19.0"
   }
 }

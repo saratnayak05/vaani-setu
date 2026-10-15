@@ -8,6 +8,7 @@
     "apps/*"
   ],
   "scripts": {
+    "dev": "npm run dev --workspace=@vaani-setu/web",
     "build:shared": "npm run build --workspace=@vaani-setu/shared",
     "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
