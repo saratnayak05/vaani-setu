@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@vaani-setu/web",
+    "dev:server": "npm run dev --workspace=@vaani-setu/server",
+    "test:server": "npm run test:ws --workspace=@vaani-setu/server",
     "build:shared": "npm run build --workspace=@vaani-setu/shared",
     "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
     "lint": "eslint .",

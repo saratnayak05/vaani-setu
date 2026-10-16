@@ -9,6 +9,7 @@ import { TextInputModal } from './components/TextInputModal';
 import type { AppSettings, ConversationTurn, TranslationMode, VoiceGender, SpeechSpeed } from './types';
 import { getLanguageByCode } from './data/languages';
 import { QUICK_PHRASES, translateText } from './data/translations';
+import { checkBackendHealth, translateWithBackend, playBase64Audio } from './services/api';
 
 export const App: React.FC = () => {
   // Theme & Settings
@@ -25,6 +26,10 @@ export const App: React.FC = () => {
   // Language pair (defaults match the screenshot: Odia <-> Tamil)
   const [sourceLang, setSourceLang] = useState<string>('od-IN');
   const [targetLang, setTargetLang] = useState<string>('ta-IN');
+
+  // Backend connection status
+  const [backendOnline, setBackendOnline] = useState<boolean>(false);
+  const [backendMode, setBackendMode] = useState<string>('mock');
 
   // Modals
   const [langPickerTarget, setLangPickerTarget] = useState<'source' | 'target' | null>(null);
@@ -77,6 +82,19 @@ export const App: React.FC = () => {
     }
   }, [settings.theme]);
 
+  // Periodic Backend Health Check
+  useEffect(() => {
+    const pollBackend = async () => {
+      const res = await checkBackendHealth();
+      setBackendOnline(res.online);
+      if (res.mode) setBackendMode(res.mode);
+    };
+
+    pollBackend();
+    const interval = setInterval(pollBackend, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Audio synthesis helper
   const playSynthesizedAudio = (text: string, langCode: string, onDone?: () => void) => {
     if (!('speechSynthesis' in window)) {
@@ -118,7 +136,10 @@ export const App: React.FC = () => {
 
   const playFallbackTone = () => {
     try {
-      const ctx = audioCtxRef.current || new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const ctx =
+        audioCtxRef.current ||
+        new (window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       audioCtxRef.current = ctx;
 
       const osc = ctx.createOscillator();
@@ -180,8 +201,8 @@ export const App: React.FC = () => {
     handleSwapLanguages();
   };
 
-  // Select Quick Phrase
-  const handleSelectPhrase = (key: string) => {
+  // Select Quick Phrase with Backend Integration
+  const handleSelectPhrase = async (key: string) => {
     setActivePhraseKey(key);
     const phrase = QUICK_PHRASES.find((p) => p.key === key);
     if (!phrase) return;
@@ -190,13 +211,10 @@ export const App: React.FC = () => {
       native: phrase.englishPrompt,
       phonetic: phrase.englishPrompt,
     };
-    const t2 = phrase.translations[targetLang] || phrase.translations['ta-IN'] || {
+    const localT2 = phrase.translations[targetLang] || phrase.translations['ta-IN'] || {
       native: phrase.englishPrompt,
       phonetic: phrase.englishPrompt,
     };
-
-    const newLatency = Number((0.26 + Math.random() * 0.12).toFixed(2));
-    setLatencySeconds(newLatency);
 
     setTurn1({
       id: `turn-${Date.now()}-1`,
@@ -208,61 +226,142 @@ export const App: React.FC = () => {
       latencySeconds: 0.11,
     });
 
+    // If backend is online, call backend translate API
+    if (backendOnline) {
+      setIsProcessing(true);
+      try {
+        const res = await translateWithBackend(t1.native, sourceLang, targetLang);
+        const sec = Number((res.latency.totalMs / 1000).toFixed(2));
+        setLatencySeconds(sec || 0.28);
+
+        setTurn2({
+          id: `turn-${Date.now()}-2`,
+          speaker: 'speaker2',
+          langCode: targetLang,
+          nativeText: res.translatedText,
+          phoneticText: localT2.phonetic,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          latencySeconds: sec || 0.28,
+        });
+
+        // Play audio from backend if available and not in text-only mode
+        if (settings.mode !== 'text') {
+          setIsAudioPlaying2(true);
+          if (res.audioBase64) {
+            await playBase64Audio(res.audioBase64, res.mimeType || 'audio/wav');
+            setIsAudioPlaying2(false);
+          } else {
+            playSynthesizedAudio(res.translatedText, targetLang, () => {
+              setIsAudioPlaying2(false);
+            });
+          }
+        }
+      } catch {
+        // Fallback to local
+        fallbackLocalPhrase(localT2.native, localT2.phonetic);
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      fallbackLocalPhrase(localT2.native, localT2.phonetic);
+    }
+  };
+
+  const fallbackLocalPhrase = (nativeText: string, phoneticText: string) => {
+    const newLatency = Number((0.26 + Math.random() * 0.12).toFixed(2));
+    setLatencySeconds(newLatency);
+
     setTurn2({
       id: `turn-${Date.now()}-2`,
       speaker: 'speaker2',
       langCode: targetLang,
-      nativeText: t2.native,
-      phoneticText: t2.phonetic,
+      nativeText,
+      phoneticText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       latencySeconds: newLatency,
     });
 
-    // If voice mode or both mode is enabled, play the translation
     if (settings.mode !== 'text') {
       setIsAudioPlaying2(true);
-      playSynthesizedAudio(t2.native, targetLang, () => {
+      playSynthesizedAudio(nativeText, targetLang, () => {
         setIsAudioPlaying2(false);
       });
     }
   };
 
-  // Manual Text Input Submission
-  const handleTextSubmit = (customText: string) => {
+  // Manual Text Input Submission with Backend Integration
+  const handleTextSubmit = async (customText: string) => {
     setIsProcessing(true);
+
+    setTurn1({
+      id: `turn-${Date.now()}-1`,
+      speaker: 'speaker1',
+      langCode: sourceLang,
+      nativeText: customText,
+      phoneticText: customText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      latencySeconds: 0.1,
+    });
+
+    if (backendOnline) {
+      try {
+        const res = await translateWithBackend(customText, sourceLang, targetLang);
+        const sec = Number((res.latency.totalMs / 1000).toFixed(2));
+        setLatencySeconds(sec || 0.29);
+
+        setTurn2({
+          id: `turn-${Date.now()}-2`,
+          speaker: 'speaker2',
+          langCode: targetLang,
+          nativeText: res.translatedText,
+          phoneticText: res.translatedText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          latencySeconds: sec || 0.29,
+        });
+
+        if (settings.mode !== 'text') {
+          setIsAudioPlaying2(true);
+          if (res.audioBase64) {
+            await playBase64Audio(res.audioBase64, res.mimeType || 'audio/wav');
+            setIsAudioPlaying2(false);
+          } else {
+            playSynthesizedAudio(res.translatedText, targetLang, () => {
+              setIsAudioPlaying2(false);
+            });
+          }
+        }
+      } catch {
+        fallbackLocalSubmit(customText);
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      fallbackLocalSubmit(customText);
+      setIsProcessing(false);
+    }
+  };
+
+  const fallbackLocalSubmit = (customText: string) => {
     const translated = translateText(customText, sourceLang, targetLang);
     const newLatency = Number((0.28 + Math.random() * 0.1).toFixed(2));
     setLatencySeconds(newLatency);
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      setTurn1({
-        id: `turn-${Date.now()}-1`,
-        speaker: 'speaker1',
-        langCode: sourceLang,
-        nativeText: customText,
-        phoneticText: customText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        latencySeconds: 0.1,
-      });
+    setTurn2({
+      id: `turn-${Date.now()}-2`,
+      speaker: 'speaker2',
+      langCode: targetLang,
+      nativeText: translated.native,
+      phoneticText: translated.phonetic,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      latencySeconds: newLatency,
+    });
 
-      setTurn2({
-        id: `turn-${Date.now()}-2`,
-        speaker: 'speaker2',
-        langCode: targetLang,
-        nativeText: translated.native,
-        phoneticText: translated.phonetic,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        latencySeconds: newLatency,
+    if (settings.mode !== 'text') {
+      setIsAudioPlaying2(true);
+      playSynthesizedAudio(translated.native, targetLang, () => {
+        setIsAudioPlaying2(false);
       });
-
-      if (settings.mode !== 'text') {
-        setIsAudioPlaying2(true);
-        playSynthesizedAudio(translated.native, targetLang, () => {
-          setIsAudioPlaying2(false);
-        });
-      }
-    }, 450);
+    }
   };
 
   // Microphone toggle with browser SpeechRecognition or simulation
@@ -281,7 +380,6 @@ export const App: React.FC = () => {
     // Start recording
     setIsRecording(true);
 
-    // Check if webkitSpeechRecognition is available
     const SpeechRecognition =
       (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition ||
       (window as unknown as { webkitSpeechRecognition: unknown }).webkitSpeechRecognition;
@@ -302,7 +400,6 @@ export const App: React.FC = () => {
         };
 
         recognition.onerror = () => {
-          // If error or cancelled, simulate smooth fallback
           setTimeout(() => {
             setIsRecording(false);
             const randomPhrase = QUICK_PHRASES[Math.floor(Math.random() * QUICK_PHRASES.length)];
@@ -365,7 +462,7 @@ export const App: React.FC = () => {
     >
       {/* Container simulating mobile frame or elegant full-width centered card */}
       <main className="w-full max-w-md min-h-screen flex flex-col justify-between px-3 sm:px-4 py-2 sm:py-3 relative">
-        {/* Top Header */}
+        {/* Top Header with live Backend Indicator */}
         <Header
           sourceLang={sourceLang}
           targetLang={targetLang}
@@ -388,6 +485,8 @@ export const App: React.FC = () => {
               tableFaceToFaceMode: !settings.tableFaceToFaceMode,
             })
           }
+          backendOnline={backendOnline}
+          backendMode={backendMode}
         />
 
         {/* Live Conversation Display */}

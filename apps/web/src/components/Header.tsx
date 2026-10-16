@@ -14,6 +14,8 @@ interface HeaderProps {
   onToggleTheme: () => void;
   tableMode: boolean;
   onToggleTableMode: () => void;
+  backendOnline?: boolean;
+  backendMode?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   tableMode,
   onToggleTableMode,
+  backendOnline = false,
+  backendMode,
 }) => {
   const src = getLanguageByCode(sourceLang);
   const tgt = getLanguageByCode(targetLang);
@@ -50,8 +54,22 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2">
             <h1 className="text-base sm:text-lg font-semibold tracking-wide text-neutral-900 dark:text-white flex items-center gap-1.5">
               Vaani Setu <span className="text-saffron-500 font-medium">Live</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  backendOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                }`}
+                title={backendOnline ? `Backend Connected (${backendMode || 'Active'})` : 'Local Standalone Mode'}
+              ></span>
             </h1>
+            <span
+              className={`text-[9px] font-mono px-1.5 py-0.2 rounded-full uppercase tracking-wider font-semibold ${
+                backendOnline
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+              }`}
+            >
+              {backendOnline ? 'API Connected' : 'Standalone'}
+            </span>
           </div>
         </div>
 
